@@ -20,8 +20,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.example</groupId>
-  <artifactId>word-count-beam</artifactId>
+  <groupId>{{PACKAGE_NAME}}</groupId>
+  <artifactId>{{PROJECT_NAME}}</artifactId>
   <version>0.1</version>
 
   <packaging>jar</packaging>

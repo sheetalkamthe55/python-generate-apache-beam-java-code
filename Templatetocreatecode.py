@@ -48,6 +48,19 @@ with open(target_file, 'w') as f:
     f.write(output)
 
 # Copy the pom.xml file to the output directory
-pom_file_src = os.path.join(current_dir, 'beam-template', 'pom.xml')
+pom_file_src = os.path.join(current_dir, 'beam-template')
+# Create the Jinja2 environment
+templateLoader = FileSystemLoader(searchpath=pom_file_src)
+templateEnv = Environment(loader=templateLoader)
+TEMPLATE_FILE = "pom.xml"
+pom_file_srctemplate = templateEnv.get_template(TEMPLATE_FILE)
+
+
+output2 = pom_file_srctemplate.render(PACKAGE_NAME=package_name, PROJECT_NAME=project_name)
 pom_file_dst = os.path.join(target_dir, 'pom.xml')
-shutil.copy2(pom_file_src, pom_file_dst)
+
+with open(pom_file_dst, 'w') as f:
+    f.write(output2)
+
+
+#shutil.copy2(pom_file_src, pom_file_dst)
