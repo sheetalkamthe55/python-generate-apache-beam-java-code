@@ -205,6 +205,9 @@
 
     <profile>
       <id>flink-runner</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
       <!-- Makes the FlinkRunner available when running a pipeline. -->
       <dependencies>
         <dependency>
