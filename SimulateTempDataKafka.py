@@ -19,7 +19,7 @@ try:
          # send message, topic: echo-input
          t = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
          outputValue = random.choice([20.0, 20.5, 21.0, 22.0, 22.5, 25.5, 30.0, 30.1, 31.5, 29.9, 35.0])
-         msg_pub = {"component": "TempSensor", "id": "UT1233234", "value": "%f" % (outputValue) }
+         msg_pub = {"component": "TempSensor", "id": "UT1233234", "temperature": "%f" % (outputValue) }
          encoded_message = json.dumps(msg_pub).encode("utf-8")
          producer.produce(encoded_message)
          time.sleep(30)
