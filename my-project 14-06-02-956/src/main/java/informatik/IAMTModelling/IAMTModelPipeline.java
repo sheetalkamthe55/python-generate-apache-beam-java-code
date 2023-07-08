@@ -1,7 +1,6 @@
 
 package informatik.IAMTModelling;
 
-import java.lang.invoke.TypeDescriptor;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,16 +17,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import informatik.IAMTModelling.SensorData;
-import org.apache.beam.sdk.coders.SerializableCoder;
-import org.apache.beam.sdk.coders.StringUtf8Coder;
-import org.apache.beam.sdk.coders.AtomicCoder;
-import org.apache.beam.sdk.coders.CoderException;
-import org.apache.beam.sdk.coders.StringUtf8Coder;
-import org.apache.beam.sdk.coders.VarLongCoder;
-import org.apache.beam.sdk.coders.Coder.Context;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import org.apache.beam.sdk.values.TypeDescriptors;
 
 
 import com.google.gson.Gson;
@@ -49,7 +39,7 @@ static void runIAMTModel(PipelineOptions options) {
             .withTopicPartitions(Collections.singletonList(new TopicPartition("echo-input", 0)))
             .withKeyDeserializer(LongDeserializer.class)
             .withValueDeserializer(StringDeserializer.class)
-            //.withConsumerConfigUpdates(consumerConfig)
+            .withConsumerConfigUpdates(consumerConfig)
             .withMaxNumRecords(10)
             .withoutMetadata())
      .apply(Values.create())
@@ -58,19 +48,14 @@ static void runIAMTModel(PipelineOptions options) {
     public void processElement(ProcessContext c) {
         String jsonLine = c.element();
         SensorData sensordata = new Gson().fromJson(jsonLine, SensorData.class);
+        System.out.println("Processing element: " + sensordata.getComponent() + "," + sensordata.getId() + "," + sensordata.getTemperature());
         c.output(sensordata);
-    }
-})
-)
-.apply("Format SensorData to CSV", ParDo.of(new DoFn<SensorData, String>() {
-    @ProcessElement
-    public void processElement(ProcessContext c) {
-        SensorData sensordata = c.element();
-        String csvLine = sensordata.getComponent() + "," + sensordata.getId() + "," + sensordata.getTemperature();
-        c.output(csvLine);
-    }
-})
-)
+    }}))
+.apply("Filter by Temperature", Filter.by((SensorData sensordata) -> sensordata.getTemperature() > 25.0))
+.apply("Format SensorData to CSV", MapElements
+                .into(TypeDescriptors.strings())
+                .via((SensorData sensordata) ->
+                sensordata.getComponent() + "," + sensordata.getId() + "," + sensordata.getTemperature()))
 .apply(TextIO.write().to("IAMTModel"));
 p.run().waitUntilFinish();}
 }

@@ -8,6 +8,11 @@ import org.apache.beam.sdk.coders.DefaultCoder;
 @DefaultCoder(AvroCoder.class)
 
 public class SensorData implements Serializable{
+
+    public SensorData() {
+        // Empty constructor required for deserialization
+    }
+    
     @SerializedName("component")
     private String component;
     @SerializedName("id")
@@ -15,9 +20,7 @@ public class SensorData implements Serializable{
     @SerializedName("temperature")
     private Double temperature;
 
-    public SensorData() {
-        // Empty constructor required for deserialization
-    }
+    
 
     public String getComponent() {
         return component;
