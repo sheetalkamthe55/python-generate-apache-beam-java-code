@@ -4,15 +4,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.google.gson.Gson;
 import org.apache.beam.sdk.transforms.*;
 import org.apache.beam.sdk.transforms.windowing.*;
 import org.apache.beam.sdk.values.*;
 import org.checkerframework.checker.initialization.qual.Initialized;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
-import org.joda.time.Instant;
-import org.json.JSONObject;
-import org.json.JSONTokener;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -33,8 +31,55 @@ import org.joda.time.Duration;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
+import io.delta.standalone.DeltaLog;
+import java.io.Serializable;
+import org.apache.beam.sdk.coders.AvroCoder;
+import com.google.gson.annotations.SerializedName;
+import org.apache.beam.sdk.coders.DefaultCoder;
+
 
 public class TestBeamPipeline {
+
+    @DefaultCoder(AvroCoder.class)
+    public class InputData implements Serializable {
+
+        public InputData() {};
+
+        @SerializedName("component")
+        private String component;
+
+        @SerializedName("id")
+        private String id;
+
+        @SerializedName("temperature")
+        private Double temperature;
+
+
+        public String getComponent() {
+            return component;
+        }
+
+        public void setComponent(String component) {
+            this.component = component;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public void setId(String id) {
+            this.id = id;
+        }
+
+        public Double getTemperature() {
+            return temperature;
+        }
+
+        public void setTemperature(Double temperature) {
+            this.temperature = temperature;
+        }
+
+    }
     private static final Logger LOG = LogManager.getLogger(TestBeamPipeline.class);
     // private static final Logger LOG = LoggerFactory.getLogger(TestBeamPipeline.class);
 
@@ -90,39 +135,39 @@ public class TestBeamPipeline {
 
         // Read from Kafka
         PCollection<KV<String, String>> input1 = pipeline
-                .apply("Read from Kafka", kafkaRead(options, "test", consumerConfig)); // TODO: support metadata
-        PCollection<KV<String, String>> input2 = pipeline
                 .apply("Read from Kafka", kafkaRead(options, "test1", consumerConfig)); // TODO: support metadata
+        PCollection<KV<String, String>> input2 = pipeline
+                .apply("Read from Kafka", kafkaRead(options, "test2", consumerConfig)); // TODO: support metadata
 
-        PCollection<String> merged = PCollectionList.of(input1).and(input2)
+        PCollection<String> mergedColl = PCollectionList.of(input1).and(input2)
                 .apply(Flatten.<KV<String, String>>pCollections())
                 .apply(window())
                 .apply(Values.create());
 
+        PCollection<InputData> inputDataColl = mergedColl.apply("Parse JSON to InputData", ParDo.of(new DoFn<String, InputData>() {
+            @ProcessElement
+            public void processElement(ProcessContext c) {
+                String jsonLine = c.element();
+                InputData inputdata = new Gson().fromJson(jsonLine, InputData.class);
+                c.output(inputdata);
+            }
+        }));
 
-        PCollection<Integer> temp = merged.apply("Parse Temperature",
-                ParDo.of(
-                        new DoFn<String, Integer>() {
-                            @ProcessElement
-                            public void processElement(@Element String element, OutputReceiver<Integer> out, BoundedWindow window, @Timestamp Instant timestamp) {
-                                try {
-                                    System.out.println("[" + timestamp.toString() + "] Processing element: " + element);
-                                    JSONTokener tokener = new JSONTokener(element);
-                                    JSONObject entry = new JSONObject(tokener);
-                                    Integer temperature = (Integer) entry.get("temperature");
-                                    out.output(temperature);
-                                } catch (Exception e) {
-                                    System.out.println("Error parsing JSON: " + e.getMessage()); // TODO: replace with logger
-                                }
-                            }
-                        }));
+        // group by key
+        // PCollection<KV<String, Iterable<String>>> grouped = merged.apply(GroupByKey.create());
 
-        PCollection<Double> avg = temp.apply("Average Temperature in Window", Mean.<Integer>globally().withoutDefaults());
+
+        PCollection<Double> tempColl = inputDataColl.apply("Parse Temperature", MapElements.into(TypeDescriptors.doubles())
+                        .via((InputData inputData) -> inputData.getTemperature().doubleValue()));
+
+        PCollection<Double> avgColl = tempColl.apply("Average Temperature in Window", Mean.<Double>globally().withoutDefaults());
 
         // TODO: write output to delta lake
-        avg.apply("Format Output", MapElements.into(TypeDescriptors.strings())
+        avgColl.apply("Format Output", MapElements.into(TypeDescriptors.strings())
             .via(d -> Double.toString(d)))
             .apply("Write to File", TextIO.write().to(options.getOutputFile()).withWindowedWrites());
+        
+            // use delta lake standalone https://docs.delta.io/latest/delta-standalone.html
 
 
         // Run the pipeline
