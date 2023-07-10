@@ -11,6 +11,7 @@ parser.add_argument('project_name', help='Name of the project')
 parser.add_argument('package_name', help='Package name for the project')
 parser.add_argument('--target_dir', default='my-project', help='Target directory for the generated project')
 parser.add_argument('transformarg', help='Get the name of transformations to be applied')
+parser.add_argument('--filterarg', help='Get the name of field to be filtered')
 
 # Parse the command-line arguments
 args = parser.parse_args()
@@ -20,6 +21,72 @@ project_name = args.project_name
 package_name = args.package_name
 target_dir = args.target_dir
 transformarg = args.transformarg
+filterarg = args.filterarg
+
+
+# Create the InputSchemaClass.java file
+import json
+# Load the JSON schema
+with open(("schema.json"), 'r') as f:
+    schema = json.load(f)
+
+aggregationField = schema['aggregationField'].capitalize()
+# Loop through the properties and generate the class fields and annotations
+fields = []
+methods = []
+for prop, prop_schema in schema['properties'].items():
+    field_name = prop
+    field_type = 'String' if prop_schema['type'] == 'string' else 'Double'
+    annotation = f'@SerializedName("{prop}")'
+    field = f'{annotation}\nprivate {field_type} {field_name};\n'
+    fields.append(field)
+
+    method_name = prop
+    method_type = 'String' if prop_schema['type'] == 'string' else 'Double'
+    method = f'''public {method_type} get{method_name.capitalize()}() {{
+        return {prop};
+    }}
+
+    public void set{method_name.capitalize()}({method_type} {prop}) {{
+        this.{prop} = {prop};
+    }}
+    '''
+    methods.append(method)
+
+# Combine the fields into a single string
+class_fields = '\n'.join(fields)
+
+# Combine the methods into a single string
+class_methods = '\n'.join(methods)
+
+
+# Generate the class definition with fields and getter/setter methods
+class_definition = f'''
+package {package_name};
+import java.io.Serializable;
+import org.apache.beam.sdk.coders.AvroCoder;
+import com.google.gson.annotations.SerializedName;
+import org.apache.beam.sdk.coders.DefaultCoder;
+
+@DefaultCoder(AvroCoder.class)
+     
+    public class InputData implements Serializable{{
+    
+    public InputData() {{}};
+
+    {class_fields}
+
+    {class_methods}
+}}
+'''
+# Print the class fields
+print(class_definition)
+
+
+
+
+
+
 importstring = '''
 package {{PACKAGE_NAME}};
 
@@ -39,6 +106,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import {{PACKAGE_NAME}}.InputData;
+import com.google.gson.Gson;
+import org.apache.beam.sdk.values.TypeDescriptors;
 '''
 
 mainclassstring = '''
@@ -58,12 +127,12 @@ kafkastring = '''
     final Map<String, Object> consumerConfig = new HashMap<>();
     consumerConfig.put("auto.offset.reset", "earliest");
 
-    p.apply(KafkaIO.<Long, String>read()
+    p.apply(KafkaIO.<String, String>read()
             .withBootstrapServers("{{BOOTSTRAP_SERVER}}")
             .withTopicPartitions(Collections.singletonList(new TopicPartition("{{TOPIC_NAME}}", 0)))
-            .withKeyDeserializer(LongDeserializer.class)
+            .withKeyDeserializer(StringDeserializer.class)
             .withValueDeserializer(StringDeserializer.class)
-            //.withConsumerConfigUpdates(consumerConfig)
+            .withConsumerConfigUpdates(consumerConfig)
             .withMaxNumRecords(10)
             .withoutMetadata())
      .apply(Values.create())
@@ -80,14 +149,14 @@ applystring = '.apply("Parse JSON to InputData",ParDo.of(new DoFn<String, InputD
                     '    public void processElement(ProcessContext c) {\n' \
                     '    String jsonLine = c.element(); \n' \
                     '    InputData inputdata = new Gson().fromJson(jsonLine, InputData.class);\n' \
-                    '        c.output(c.element());\n' \
+                    '        c.output(inputdata);\n' \
                     '    }\n' \
                     '}))'
 
 
 #Element wise Transforms
 if transformarg == 'parDo': #Check if can use lambda function
-    applystring = '.apply(ParDo.of(new DoFn<String, String>() {\n' \
+    applystring = applystring + '.apply(ParDo.of(new DoFn<String, String>() {\n' \
                     '    @ProcessElement\n' \
                     '    public void processElement(ProcessContext c) {\n' \
                     '        c.output(c.element());\n' \
@@ -98,10 +167,10 @@ elif transformarg == 'map': #Check how to select the datatype of lambda function
 elif transformarg == 'flatmap': #One to Many mapping eg:splitting a sentence into words, o/p PCollection<String> have to think of other examples
     applystring = '.apply(FlatMapElements.into(TypeDescriptors.strings()).via((String line) -> Arrays.asList(line.split("\\\\s+"))))'
 elif transformarg == 'filter': #o/p of filter is PCollection<InputData>
-    applystring = '.apply(Filter.by((InputData data) -> data.{{GETFILTER_FIELD}} > {{FILTER_VALUE}}))'
+    applystring = applystring + '.apply("Filter",Filter.by((InputData data) -> data.get{{aggregationField}}() > {{filterarg}}))'
 
 #Other Transforms
-elif transformarg == 'flatten':  #o/p PCollection<DataType>
+elif transformarg == 'flatten':  #o/p PCollection<DataType> by default add 
     applystring = '.apply(Flatten.iterables())'
 if transformarg == 'window': #Take the duration of window as input
     applystring = '.apply(Window.into(FixedWindows.of(Duration.standardSeconds(30))))' 
@@ -168,7 +237,15 @@ elif transformarg == 'topglobally':
                     '        return o1.compareTo(o2);\n' \
                     '    }\n' \
                     '}))'
-    
+
+
+ #Final string conversion if writing to the file
+convertstring = '.apply("Format InputData to CSV", MapElements\n' \
+                ' .into(TypeDescriptors.strings())\n' \
+                '.via((InputData inputdata) ->'
+for prop in schema['properties'].items():
+    convertstring = convertstring + 'inputdata.get' + prop[0].capitalize() + '() + "," +'
+convertstring = convertstring[:-7] + '))'
                     
 
 outputstring = '.apply(TextIO.write().to("{{PROJECT_NAME}}"));\n'
@@ -177,7 +254,7 @@ runpipeline = 'p.run().waitUntilFinish();}\n'
 
 endBrack = '}'
 
-finalapachecode = f"{importstring}{mainclassstring}{codeimplestring}{kafkastring}{applystring}{outputstring}{runpipeline}{endBrack}"
+finalapachecode = f"{importstring}{mainclassstring}{codeimplestring}{kafkastring}{applystring}{convertstring}{outputstring}{runpipeline}{endBrack}"
 
 print("finalapachecode: ", finalapachecode)
 
@@ -186,72 +263,13 @@ finalapachecode = finalapachecode.replace('{{PACKAGE_NAME}}', package_name)
 finalapachecode = finalapachecode.replace('{{PROJECT_NAME}}', project_name)
 finalapachecode = finalapachecode.replace('{{BOOTSTRAP_SERVER}}', 'localhost:9092')
 finalapachecode = finalapachecode.replace('{{TOPIC_NAME}}', 'echo-input')
+finalapachecode = finalapachecode.replace('{{aggregationField}}', aggregationField)
+finalapachecode = finalapachecode.replace('{{filterarg}}', filterarg)
+finalapachecode = finalapachecode.replace('{{SAMPLE_SIZE}}', '10')
 
 
 # Load and process the template file
 #output = template.render(PACKAGE_NAME=package_name, PROJECT_NAME=project_name)
-
-# Create the InputSchemaClass.java file
-import json
-# Load the JSON schema
-with open(("schema.json"), 'r') as f:
-    schema = json.load(f)
-
-# Loop through the properties and generate the class fields and annotations
-fields = []
-methods = []
-for prop, prop_schema in schema['properties'].items():
-    field_name = prop
-    field_type = 'String' if prop_schema['type'] == 'string' else 'Double'
-    annotation = f'@SerializedName("{prop}")'
-    field = f'{annotation}\nprivate {field_type} {field_name};\n'
-    fields.append(field)
-
-    method_name = prop
-    method_type = 'String' if prop_schema['type'] == 'string' else 'Double'
-    method = f'''public {method_type} get{method_name.capitalize()}() {{
-        return {prop};
-    }}
-
-    public void set{method_name.capitalize()}({method_type} {prop}) {{
-        this.{prop} = {prop};
-    }}
-    '''
-    methods.append(method)
-
-# Combine the fields into a single string
-class_fields = '\n'.join(fields)
-
-# Combine the methods into a single string
-class_methods = '\n'.join(methods)
-
-
-# Generate the class definition with fields and getter/setter methods
-class_definition = f'''package {{PACKAGE_NAME}};
-
-import java.io.Serializable;
-import org.apache.beam.sdk.coders.AvroCoder;
-import com.google.gson.annotations.SerializedName;
-import org.apache.beam.sdk.coders.DefaultCoder;
-
-@DefaultCoder(AvroCoder.class)
-     
-    public class InputData implements Serializable{{
-    
-    public InputData() {
-
-    ''}
-
-    {class_fields}
-
-    {class_methods}
-}}
-'''
-
-# Print the class fields
-print(class_definition)
-
-
 
 # Create the target directory
 target_path = os.path.join(target_dir, 'src/main/java', package_name.replace('.', '/'))
@@ -263,6 +281,11 @@ target_file = os.path.join(target_path, f'{project_name}Pipeline.java')
 
 with open(target_file, 'w') as f:
     f.write(finalapachecode)
+
+targetschemafile = os.path.join(target_path, f'InputData.java')
+
+with open(targetschemafile, 'w') as f:
+    f.write(class_definition)
 
 # Copy the pom.xml file to the output directory
 pom_file_src = os.path.join(current_dir, 'beam-template')
@@ -279,5 +302,3 @@ pom_file_dst = os.path.join(target_dir, 'pom.xml')
 with open(pom_file_dst, 'w') as f:
     f.write(output2)
 
-
-#shutil.copy2(pom_file_src, pom_file_dst)

@@ -1,4 +1,3 @@
-
 package informatik.IAMTModelling;
 
 import java.util.Collections;

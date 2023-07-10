@@ -3,6 +3,8 @@ import json
 with open(("schema.json"), 'r') as f:
     schema = json.load(f)
 
+aggregationField = schema['aggregationField']
+print(aggregationField.capitalize())
 # Loop through the properties and generate the class fields and annotations
 fields = []
 methods = []
@@ -44,9 +46,7 @@ import org.apache.beam.sdk.coders.DefaultCoder;
      
     public class InputData implements Serializable{{
     
-    public InputData() {
-
-    ''}
+    public InputData() {{}};
 
     {class_fields}
 
