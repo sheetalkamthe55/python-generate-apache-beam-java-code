@@ -423,6 +423,13 @@
       <version>${kafka.version}</version>
     </dependency>
 
+    <!-- https://mvnrepository.com/artifact/org.json/json -->
+    <dependency>
+        <groupId>org.json</groupId>
+        <artifactId>json</artifactId>
+        <version>20230227</version>
+    </dependency>
+
     <!-- Add slf4j API frontend binding with JUL backend -->
     <dependency>
       <groupId>org.slf4j</groupId>
