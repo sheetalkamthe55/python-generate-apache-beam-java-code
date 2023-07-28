@@ -13,6 +13,8 @@ parser.add_argument('--target_dir', default='my-project', help='Target directory
 parser.add_argument('transformarg', help='Get the name of transformations to be applied')
 parser.add_argument('--filterarg', help='Get the name of field to be filtered')
 
+#
+
 # Parse the command-line arguments
 args = parser.parse_args()
 
@@ -163,29 +165,29 @@ if transformarg == 'parDo': #Check if can use lambda function
                     '    }\n' \
                     '}))'
 elif transformarg == 'map': #Check how to select the datatype of lambda function
-    applystring = '.apply(MapElements.into(TypeDescriptors.strings()).via((String line) -> line))'
+    applystring = applystring + '.apply(MapElements.into(TypeDescriptors.strings()).via((String line) -> line))'
 elif transformarg == 'flatmap': #One to Many mapping eg:splitting a sentence into words, o/p PCollection<String> have to think of other examples
-    applystring = '.apply(FlatMapElements.into(TypeDescriptors.strings()).via((String line) -> Arrays.asList(line.split("\\\\s+"))))'
+    applystring = applystring + '.apply(FlatMapElements.into(TypeDescriptors.strings()).via((String line) -> Arrays.asList(line.split("\\\\s+"))))'
 elif transformarg == 'filter': #o/p of filter is PCollection<InputData>
     applystring = applystring + '.apply("Filter",Filter.by((InputData data) -> data.get{{aggregationField}}() > {{filterarg}}))'
 
 #Other Transforms
-elif transformarg == 'flatten':  #o/p PCollection<DataType> by default add 
-    applystring = '.apply(Flatten.iterables())'
+elif transformarg == 'flatten':  #o/p PCollection<DataType> by default add flatten if there are multiple PCollections
+    applystring = applystring + '.apply(Flatten.iterables())'
 if transformarg == 'window': #Take the duration of window as input
-    applystring = '.apply(Window.into(FixedWindows.of(Duration.standardSeconds(30))))' 
+    applystring = applystring + '.apply(Window.into(FixedWindows.of(Duration.standardSeconds(30))))' 
 
 #Aggregation Transforms
 elif transformarg == 'combine':
-    applystring = '.apply(Combine.globally(Count.<String>combineFn()).withoutDefaults())'
+    applystring = applystring + '.apply(Combine.globally(Count.<String>combineFn()).withoutDefaults())'
 elif transformarg == 'reshuffle':
-    applystring = '.apply(Reshuffle.viaRandomKey())'
+    applystring = applystring + '.apply(Reshuffle.viaRandomKey())'
 elif transformarg == 'sample':
-    applystring = '.apply(Sample.any({{SAMPLE_SIZE}}))'
+    applystring = applystring + '.apply(Sample.any({{SAMPLE_SIZE}}))'
 elif transformarg == 'distinct':
-    applystring = '.apply(Distinct.create())'
+    applystring = applystring + '.apply(Distinct.create())'
 elif transformarg == 'top':
-    applystring = '.apply(Top.of(1, new Comparator<String>() {\n' \
+    applystring = applystring + '.apply(Top.of(1, new Comparator<String>() {\n' \
                     '    @Override\n' \
                     '    public int compare(String o1, String o2) {\n' \
                     '        return o1.compareTo(o2);\n' \
@@ -194,44 +196,44 @@ elif transformarg == 'top':
     
 #eg: PCollection<KV<String, Datatype>> (need to create a KV)
 elif transformarg == 'groupbykey':
-    applystring = '.apply(GroupByKey.create())'
+    applystring = applystring + '.apply(GroupByKey.create())'
 elif transformarg == 'coGroupByKey':
-    applystring = '.apply(CoGroupByKey.create())'
+    applystring = applystring + '.apply(CoGroupByKey.create())'
 elif transformarg == 'combineperkey':
-    applystring = '.apply(Combine.perKey(Count.<String>combineFn()))'
+    applystring = applystring + '.apply(Combine.perKey(Count.<String>combineFn()))'
 elif transformarg == 'countperkey': 
-    applystring = '.apply(Count.perKey())'
+    applystring = applystring + '.apply(Count.perKey())'
 elif transformarg == 'sumperkey':
-    applystring = '.apply(Sum.perKey())'
+    applystring = applystring + '.apply(Sum.perKey())'
 elif transformarg == 'minperkey':
-    applystring = '.apply(Min.perKey())'    
+    applystring = applystring + '.apply(Min.perKey())'    
 elif transformarg == 'maxperkey':
-    applystring = '.apply(Max.perKey())'
+    applystring = applystring + '.apply(Max.perKey())'
 elif transformarg == 'meanperkey':
-    applystring = '.apply(Mean.perKey())'
+    applystring = applystring + '.apply(Mean.perKey())'
 elif transformarg == 'topperkey':   
-    applystring = '.apply(Top.perKey(1, new Comparator<String>() {\n' \
+    applystring = applystring + '.apply(Top.perKey(1, new Comparator<String>() {\n' \
                     '    @Override\n' \
                     '    public int compare(String o1, String o2) {\n' \
                     '        return o1.compareTo(o2);\n' \
                     '    }\n' \
                     '}))'
 elif transformarg == 'combinegroupedvalues':
-    applystring = '.apply(Combine.groupedValues(Count.<String>combineFn()))'
+    applystring = applystring + '.apply(Combine.groupedValues(Count.<String>combineFn()))'
 
 
 elif transformarg == 'countglobally': #eg: PCollection<DataType> 
-    applystring = '.apply(Count.globally())'
+    applystring = applystring + '.apply(Count.globally())'
 elif transformarg == 'sumglobally': #eg: PCollection<DataType> Check if to apply with datatype
-    applystring = '.apply(Sum.globally())'
+    applystring = applystring + '.apply(Sum.globally())'
 elif transformarg == 'minglobally':   
-    applystring = '.apply(Min.globally())' 
+    applystring = applystring + '.apply(Min.globally())' 
 elif transformarg == 'maxglobally':
-    applystring = '.apply(Max.globally())' 
+    applystring = applystring + '.apply(Max.globally())' 
 elif transformarg == 'meanglobally':
-    applystring = '.apply(Mean.globally())'
+    applystring = applystring + '.apply(Mean.globally())'
 elif transformarg == 'topglobally':
-    applystring = '.apply(Top.globally(1, new Comparator<String>() {\n' \
+    applystring = applystring + '.apply(Top.globally(1, new Comparator<String>() {\n' \
                     '    @Override\n' \
                     '    public int compare(String o1, String o2) {\n' \
                     '        return o1.compareTo(o2);\n' \

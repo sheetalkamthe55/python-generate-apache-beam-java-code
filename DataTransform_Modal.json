@@ -1,0 +1,56 @@
+{
+    "flows":[
+        {
+          "flow_id": "Temperature_Agg_Flow",
+          "flow": {
+            "inputNode1": {
+              "operation": "TempSensorInput1",
+              "isOperator": true,
+              "next_oiid": "outputNode"
+            },
+            "inputNode2": {
+              "operation": "TempSensorInput2",
+              "isOperator": false,
+              "next_oiid": "outputNode"
+            },
+            "outputNode": {
+              "operation": "combineInputs",
+              "isOperator": true,
+              "next_oiid": "none",
+              "join_list": ["TempSensorInput1", "TempSensorInput2"]
+            }
+          }
+        }
+      ],
+    "devices":[
+       {
+          "id":"646924e5a7bfb1291044ff74",
+          "components":[
+             {
+                "id":"6469253da7bfb1291044ff77",
+                "name":"TestTempOperator",
+                "type":"sensor",
+                "failure_annotations":[
+                   
+                ],
+                "parameter_list":[
+                   
+                ]
+             }
+          ]
+       }
+    ],
+    "validation":{
+       
+    },
+    "gateway_config":{
+       "gateway_ury":"/gateway",
+       "user":"sheetal",
+       "password":"12345"
+    },
+    "kafka_config":{
+       "Bootstrap-server":"localhost:9092",
+       "Topic":"echo-input"
+    }
+    }
+ 
