@@ -1,5 +1,6 @@
 import argparse
 import os
+import json
 from jinja2 import Environment, FileSystemLoader
 
 # Get the absolute path of the current script's directory
@@ -25,105 +26,256 @@ target_dir = args.target_dir
 transformarg = args.transformarg
 filterarg = args.filterarg
 
+# Load the JSON Model
+with open(("ME-Model.json"), 'r') as f:
+    model = json.load(f)
 
-# Create the InputSchemaClass.java file
-import json
-# Load the JSON schema
-with open(("schema.json"), 'r') as f:
-    schema = json.load(f)
-
-aggregationField = schema['aggregationField'].capitalize()
-# Loop through the properties and generate the class fields and annotations
-fields = []
-methods = []
-for prop, prop_schema in schema['properties'].items():
-    field_name = prop
-    field_type = 'String' if prop_schema['type'] == 'string' else 'Double'
-    annotation = f'@SerializedName("{prop}")'
-    field = f'{annotation}\nprivate {field_type} {field_name};\n'
-    fields.append(field)
-
-    method_name = prop
-    method_type = 'String' if prop_schema['type'] == 'string' else 'Double'
-    method = f'''public {method_type} get{method_name.capitalize()}() {{
-        return {prop};
-    }}
-
-    public void set{method_name.capitalize()}({method_type} {prop}) {{
-        this.{prop} = {prop};
-    }}
-    '''
-    methods.append(method)
-
-# Combine the fields into a single string
-class_fields = '\n'.join(fields)
-
-# Combine the methods into a single string
-class_methods = '\n'.join(methods)
+    node_map = {}
+    source_node_map = {}
+    for node_id, node in flow['flow'].items():
+        node_info = next((item for item in model['streaming'] if item['flowElementId'] == node_id), None)
+        node_map[node_id] = {
+            "name": node.get('operation'), # Note that this is transform operation for transforms and source name for sources
+            "parameter_list": node_info.get('parameterList'),
+            "type": node['type'],
+            "next_oiid": node['nextOiid']
+        }
+        if node_map[node_id]['type'] == 'source':
+            node_map[node_id]['kafkaTopic'] = next((paramter['value'] for paramter in node_info['parameter_list'] if paramter['name'] == 'kafkaTopic'), None)
+            node_map[node_id]['inputjson'] = json.load(next((paramter['value'] for paramter in node_info['parameter_list'] if paramter['name'] == 'inputjson'), None))
+            node_map[node_id]['windowlengthInSec'] = next((paramter['value'] for paramter in node_info['parameter_list'] if paramter['name'] == 'windowlengthInSec'), None)
+            node_map[node_id]['slidingWindowStepInSec'] = next((paramter['value'] for paramter in node_info['parameter_list'] if paramter['name'] == 'slidingWindowStepInSec'), None)
+            node_map[node_id]['slidingWindow'] = True if node_map[node_id]['slidingWindowStepInSec'] != None else False
+            source_node_map[node_id] = node_map[node_id]
 
 
-# Generate the class definition with fields and getter/setter methods
-class_definition = f'''
-package {package_name};
-import java.io.Serializable;
-import org.apache.beam.sdk.coders.AvroCoder;
-import com.google.gson.annotations.SerializedName;
-import org.apache.beam.sdk.coders.DefaultCoder;
+# TODO: remove
+# # Create the InputSchemaClass.java file 
+# # Load the JSON schema
+# with open(("schema.json"), 'r') as f:
+#     schema = json.load(f)
 
-@DefaultCoder(AvroCoder.class)
-     
-    public class InputData implements Serializable{{
+input_schema_classes = ''
+for source_node_id, source_node in source_node_map.items():
+    schema = source_node['inputjson']
+    aggregationField = schema['aggregationField'].capitalize()
+    # Loop through the properties and generate the class fields and annotations
+    fields = []
+    methods = []
+    for prop, prop_schema in schema['properties'].items():
+        field_name = prop
+        field_type = 'String' if prop_schema['type'] == 'string' else 'Double'
+        annotation = f'@SerializedName("{prop}")'
+        field = f'{annotation}\nprivate {field_type} {field_name};\n'
+        fields.append(field)
+
+        method_name = prop
+        method_type = 'String' if prop_schema['type'] == 'string' else 'Double'
+        method = f'''public {method_type} get{method_name.capitalize()}() {{
+            return {prop};
+        }}
+
+        public void set{method_name.capitalize()}({method_type} {prop}) {{
+            this.{prop} = {prop};
+        }}
+        '''
+        methods.append(method)
+
+    # Combine the fields into a single string
+    class_fields = '\n'.join(fields)
+
+    # Combine the methods into a single string
+    class_methods = '\n'.join(methods)
+
+    input_schema_classes += f'''
+    @DefaultCoder(AvroCoder.class) 
+    public class InputData{source_node_id} implements Serializable {{
     
-    public InputData() {{}};
+        public InputData{source_node_id}() {{}};
 
-    {class_fields}
+        {class_fields}
 
-    {class_methods}
-}}
+        {class_methods}
+    }}
+
 '''
-# Print the class fields
-print(class_definition)
+
+
+# TODO: remove
+# # Generate the class definition with fields and getter/setter methods
+# class_definition = f'''
+# package {package_name};
+# import java.io.Serializable;
+# import org.apache.beam.sdk.coders.AvroCoder;
+# import com.google.gson.annotations.SerializedName;
+# import org.apache.beam.sdk.coders.DefaultCoder;
+
+# @DefaultCoder(AvroCoder.class)
+     
+#     public class InputData implements Serializable{{
+    
+#     public InputData() {{}};
+
+#     {class_fields}
+
+#     {class_methods}
+# }}
+# '''
+# # Print the class fields
+# print(class_definition)
 
 
 
+# build main code of beam
 
+beam_main = ''
 
-
-importstring = '''
+import_string = '''
 package {{PACKAGE_NAME}};
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import com.google.gson.Gson;
+import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.transforms.windowing.*;
+import org.apache.beam.sdk.values.*;
+import org.checkerframework.checker.initialization.qual.Initialized;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
+
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.io.kafka.KafkaIO;
+import org.apache.beam.sdk.options.Default;
+import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
-import org.apache.beam.sdk.transforms.*;
-import org.apache.beam.sdk.values.KV;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PCollectionList;
+import org.apache.beam.sdk.options.Validation.Required;
+import org.joda.time.Duration;
+
+
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+
+import io.delta.standalone.DeltaLog;
+import java.io.Serializable;
+import org.apache.beam.sdk.coders.AvroCoder;
+import com.google.gson.annotations.SerializedName;
+import org.apache.beam.sdk.coders.DefaultCoder;
+
+
 import {{PACKAGE_NAME}}.InputData;
 import com.google.gson.Gson;
 import org.apache.beam.sdk.values.TypeDescriptors;
+
 '''
 
-mainclassstring = '''
-public class {{PROJECT_NAME}}Pipeline {
-    public static void main(String[] args) {
-        final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(PipelineOptions.class);
-        run{{PROJECT_NAME}}(options);
+beam_main += import_string
+beam_main += '''
+public class TestBeamPipeline {
+
+'''
+
+
+beam_main += input_schema_classes
+
+beam_main += '''
+    private static final Logger LOG = LogManager.getLogger(TestBeamPipeline.class);
+
+    public interface IoTStreamingOptions extends PipelineOptions {
+
+        @Description("Kafka bootstrap servers, comma separated list")
+        @Default.String("localhost:9092")
+        String getKafkaBootstrapServers();
+
+        void setKafkaBootstrapServers(String kafkaBootstrapServers);
+
+        @Description("Kafka topic to read from")
+        @Required
+        String getKafkaTopic();
+
+        void setKafkaTopic(String kafkaTopic);
+
+        @Description("Path of the file to write to")
+        @Default.String("output.txt")
+        String getOutputFile();
+
+        void setOutputFile(String outputFile);
     }
+
+    private static PTransform<@UnknownKeyFor @NonNull @Initialized PBegin, @UnknownKeyFor @NonNull @Initialized PCollection<@UnknownKeyFor @NonNull @Initialized KV<String, String>>> kafkaRead(IoTStreamingOptions options, String test, Map<String, Object> consumerConfig) {
+        return KafkaIO.<String, String>read()
+                .withBootstrapServers(options.getKafkaBootstrapServers())
+                .withTopicPartitions(
+                        Collections.singletonList(new TopicPartition(test, 0))
+                ) // TODO: support multiple partitions
+                .withKeyDeserializer(StringDeserializer.class)
+                .withValueDeserializer(StringDeserializer.class)
+                .withConsumerConfigUpdates(consumerConfig) // TODO: needed?
+                .withoutMetadata();
+    }
+
+    private static <T> Window<T> window(long duration, boolean sliding, long period) {
+        Window<T> window;
+        if (sliding) {
+            window = Window.<T>into(SlidingWindows.of(Duration.standardSeconds(duration)).every(Duration.standardSeconds(period)));
+        } else {
+            window = Window.<T>into(FixedWindows.of(Duration.standardSeconds(duration)));
+        }
+        return window.triggering(Repeatedly.forever(AfterWatermark.pastEndOfWindow().withLateFirings(AfterPane.elementCountAtLeast(1))))
+            .withAllowedLateness(Duration.standardSeconds(5))
+            .discardingFiredPanes();
+    }
+
+    public static void main(String[] args) {
+        // Create the pipeline options
+        IoTStreamingOptions options = PipelineOptionsFactory.fromArgs(args).as(IoTStreamingOptions.class);
+
+        // Create the pipeline
+        Pipeline pipeline = Pipeline.create(options);
+
+        final Map<String, Object> consumerConfig = new HashMap<>();
+        consumerConfig.put("auto.offset.reset", "earliest");
+
 '''
 
-codeimplestring = '''
-static void run{{PROJECT_NAME}}(PipelineOptions options) {
-    Pipeline p = Pipeline.create(options);
-'''
+# TODO: algorithm
+for flow in model['flows']:    
+    for source_node_id, source_node in source_node_map.items():
+        kafka_string = f'''
+        PCollection<InputData> {source_node_id} = pipeline
+                .apply("Read from Kafka", kafkaRead(options, "{source_node['kafkaTopic']}", consumerConfig))
+                .apply(Values.create())
+                .apply(window({source_node['windowlengthInSec']}, {source_node['slidingWindow']}, {source_node['slidingWindowStepInSec']}))
+                .apply("Parse JSON to InputData{source_node_id}", ParDo.of(new DoFn<String, InputData{source_node_id}>() {{
+                    @ProcessElement
+                    public void processElement(ProcessContext c) {{
+                        String jsonLine = c.element(); 
+                        InputData{source_node_id} inputdata = new Gson().fromJson(jsonLine, InputData{source_node_id}.class);
+                        c.output(inputdata);
+                    }}
+                }}));
+
+        '''
+        beam_main += kafka_string
+
+
+
+# main_class_string = '''
+# public class {{PROJECT_NAME}}Pipeline {
+#     public static void main(String[] args) {
+#         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(PipelineOptions.class);
+#         run{{PROJECT_NAME}}(options);
+#     }
+# '''
+
+
+# code_imple_string = '''
+# static void run{{PROJECT_NAME}}(PipelineOptions options) {
+#     Pipeline p = Pipeline.create(options);
+# '''
 
 kafkastring = '''
     final Map<String, Object> consumerConfig = new HashMap<>();
@@ -256,7 +408,7 @@ runpipeline = 'p.run().waitUntilFinish();}\n'
 
 endBrack = '}'
 
-finalapachecode = f"{importstring}{mainclassstring}{codeimplestring}{kafkastring}{applystring}{convertstring}{outputstring}{runpipeline}{endBrack}"
+finalapachecode = f"{import_string}{main_class_string}{code_imple_string}{kafkastring}{applystring}{convertstring}{outputstring}{runpipeline}{endBrack}"
 
 print("finalapachecode: ", finalapachecode)
 
