@@ -3,68 +3,63 @@
       {
          "flow_id": "IAMT-Flow",
          "flow": {
-            "node0": {
+            "input1": {
                "operation": "Mock-StreamSensor",
                "isOperator": true,
                "type": "input",
-               "next_oiid": "node2"
+               "next_oiid": ["mean1", "mean3"]
             },
-            "node1": {
+            "input2": {
                "operation": "Mock-StreamSensor",
                "isOperator": true,
-               "next_oiid": "node3"
+               "type": "input",
+               "next_oiid": ["mean2", "mean3"]
             },
-            "node2": {
-               "operation": "Window",
-               "isOperator": false,
-               "next_oiid": "node4"
-            },
-            "node3": {
-               "operation": "Window",
-               "isOperator": false,
-               "next_oiid": "node5"
-            },
-            "node4": {
+            "mean1": {
                "operation": "Mean",
+               "type": "transform",
                "isOperator": false,
-               "next_oiid": "node6"
+               "next_oiid": "outputNode1"
             },
-            "node5": {
+            "mean2": {
                "operation": "Mean",
+               "type": "transform",
                "isOperator": false,
-               "next_oiid": "node6"
+               "next_oiid": "outputNode1"
             },
-            "node6": {
-               "operation": "Mock-Operator1",
+            "outputNode1": {
+               "operation": "Mock-FileOutput",
                "isOperator": true,
-               "next_oiid": "none"
+               "type": "output",
+               "join_list": ["mean1", "mean2"]
+            },
+            "mean3": {
+               "operation": "Mean",
+               "type": "transform",
+               "isOperator": false,
+               "next_oiid": "outputNode2",               
+               "join_list": ["input1", "input2"]
+            },
+            "outputNode2": {
+               "operation": "Mock-FileOutput",
+               "isOperator": true,
+               "type": "output",
+               "join_list": ["mean3"]
             }
          }
       }
    ],
    "streaming": [
-      {
-         "flowElementId": "node2",
-         "validatorId": "flinkwindow",
-         "name": "Window",
-         "parameter_list": [
-            {
-               "name": "windowlength",
-               "value": "10"
-            }
-         ]
-      },
       {  
          "id": "610220dd10b48866c279b24g",
-         "flowElementId": "node2",
-         "validatorId": "flinkwindow",
-         "name": "Input1",
-         "type": "input",
+         "flowElementId": "input1",
+         "validatorId": "KafkaInput",
+         "name": "Input 1",
          "failure_annotations": [],
          "parameter_list": [
             {
                "name": "kafkaTopic",
-               "value": "echo-input0"
+               "value": "test1"
             },
             {
                "name": "inputjson",
@@ -84,8 +79,37 @@
             }
          ]
       },
+      {  
+         "id": "610220dd10b48866c2adsdaf",
+         "flowElementId": "input2",
+         "validatorId": "KafkaInput",
+         "name": "Input 2",
+         "failure_annotations": [],
+         "parameter_list": [
+            {
+               "name": "kafkaTopic",
+               "value": "test2"
+            },
+            {
+               "name": "inputjson",
+               "value": "{\"type\":\"object\", \"properties\":{\"component\":{ \"type\":\"string\" }, \"id\":{ \"type\":\"string\" }, \"temperature\":{ \"type\":\"number\" } } }"
+            },
+            {
+               "name": "windowlengthInSec",
+               "value": 10
+            },
+            {
+               "name": "slidingWindow",
+               "value": true
+            },
+            {
+               "name": "slidingWindowStepInSec",
+               "value": 15
+            }
+         ]
+      },
       {
-         "flowElementId": "node4",
+         "flowElementId": "mean1",
          "validatorId": "Mean",
          "name": "Mean",
          "parameter_list": [
@@ -96,15 +120,41 @@
          ]
       },
       {
-         "flowElementId": "node5",
+         "flowElementId": "mean2",
          "validatorId": "Mean",
          "name": "Mean",
-         "type": "transform",
          "parameter_list": [
             {
                "name": "FieldToAverage",
                "value": "temperature"
             }
+         ]
+      },
+      {
+         "flowElementId": "mean3",
+         "validatorId": "Mean",
+         "name": "Mean",
+         "parameter_list": [
+            {
+               "name": "FieldToAverage",
+               "value": "temperature"
+            }
+         ]
+      },
+      {
+         "flowElementId": "outputNode1",
+         "validatorId": "WriteToFile",
+         "name": "WriteToFile",
+         "parameter_list": [
+            {}
+         ]
+      },
+      {
+         "flowElementId": "outputNode2",
+         "validatorId": "WriteToFile",
+         "name": "WriteToFile",
+         "parameter_list": [
+            {}
          ]
       }
    ],
