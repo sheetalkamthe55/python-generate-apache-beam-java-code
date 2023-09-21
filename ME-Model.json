@@ -70,10 +70,6 @@
                "value": 10
             },
             {
-               "name": "slidingWindow",
-               "value": true
-            },
-            {
                "name": "slidingWindowStepInSec",
                "value": 15
             }
@@ -97,10 +93,6 @@
             {
                "name": "windowlengthInSec",
                "value": 10
-            },
-            {
-               "name": "slidingWindow",
-               "value": true
             },
             {
                "name": "slidingWindowStepInSec",
