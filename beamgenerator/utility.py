@@ -24,7 +24,7 @@ def create_input_schema_classes(source_node_map: dict[str, Node]):
         # Loop through the properties and generate the class fields and annotations
         fields = []
         methods = []
-        for property_name, property_type in cast(InputPCollectionType, source_node.output_p_collection_type).fields:
+        for property_name, property_type in cast(InputPCollectionType, source_node.output_p_collection_type).fields.items():
             annotation = f'@SerializedName("{property_name}")'
             field = f'\n        {annotation}\n        private {property_type} {property_name};\n'
             fields.append(field)

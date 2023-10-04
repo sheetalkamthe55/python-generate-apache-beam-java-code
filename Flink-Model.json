@@ -55,7 +55,7 @@
              },
              {
                 "name":"inputjson",
-                "value":"{         \"$schema\": \"http://json-schema.org/draft-07/schema#\",         \"type\": \"object\",         \"properties\": {           \"component\": {             \"type\": \"string\"           },           \"id\": {             \"type\": \"string\"           },           \"temperature\": {             \"type\": \"number\"           }         },         \"required\": [           \"component\",           \"id\",           \"temperature\"         ]       }"
+                "value":"{         \"$schema\": \"http://json-schema.org/draft-07/schema#\",         \"type\": \"object\",         \"properties\": {           \"component\": {             \"type\": \"string\"           },           \"id\": {             \"type\": \"string\"           },           \"temperature\": {             \"type\": \"Double\"           }         },         \"required\": [           \"component\",           \"id\",           \"temperature\"         ]       }"
              },
              {
                 "name":"windowlengthInSec",
@@ -74,7 +74,7 @@
              },
              {
                 "name":"inputjson",
-                "value":"{         \"$schema\": \"http://json-schema.org/draft-07/schema#\",         \"type\": \"object\",         \"properties\": {           \"component\": {             \"type\": \"string\"           },           \"id\": {             \"type\": \"string\"           },           \"temperature\": {             \"type\": \"number\"           }         },         \"required\": [           \"component\",           \"id\",           \"temperature\"         ]       }"
+                "value":"{         \"$schema\": \"http://json-schema.org/draft-07/schema#\",         \"type\": \"object\",         \"properties\": {           \"component\": {             \"type\": \"string\"           },           \"id\": {             \"type\": \"string\"           },           \"temperature\": {             \"type\": \"Double\"           }         },         \"required\": [           \"component\",           \"id\",           \"temperature\"         ]       }"
              },
              {
                 "name":"windowlengthInSec",
