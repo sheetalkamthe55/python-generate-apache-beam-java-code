@@ -11,12 +11,11 @@ def load_nodes_from_model(model_path) -> tuple[dict[str, Node], dict[str, Node]]
 
         node_map = {}
         source_node_map = {}
-        for node_id, node in model['flows'][0]['flow'].items():
-            node_info = next((item for item in model['streaming'] if item['flowElementId'] == node_id), None)
+        for node_id, node in model['flows'][0]['flow'].items(): # we assume that flows only contains one flow
+            node_info = next((item for item in model['streaming'] if item['id'] == node_id), None)
             node_map[node_id] = Node(node_id, node, node_info)
             if node_map[node_id].is_input():
                 source_node_map[node_id] = node_map[node_id]
-
         return node_map, source_node_map
     
 def create_input_schema_classes(source_node_map: dict[str, Node]):

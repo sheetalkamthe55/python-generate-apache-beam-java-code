@@ -25,25 +25,19 @@ package_name = args.package_name
 target_dir = args.target_dir
 bootstrap_server_default = "localhost:9092" # TODO: get from model
 
-node_map, source_node_map = beamgenerator.load_nodes_from_model("ME-Model.json")
+node_map, source_node_map = beamgenerator.load_nodes_from_model("Flink-Model.json")
  
 beam_main = beamgenerator.create_main_header(package_name, source_node_map, bootstrap_server_default)
 
 ## parse model tree and create main logic (pipeline code) ##
-
-print(beam_main) 
-
 # 2. loop over all nodes and create transforms
-# for flow in model['flows']: # TODO: do we need this?
 visited_nodes: set[str] = set()
 join_nodes: dict[str, Node] = {} # need to be revisted later
 
 # TODO: in case we need original data again, else remove (and remove import of copy)
 pending_visit: set[str] = set(source_node_map.keys()) # TODO: maybe don't need this
-
 # start at random source node
-_, current_node = source_node_map.popitem()
-
+current_node = node_map[pending_visit.pop()]
 
 # TODO: make dict access safe -> relevant exceptions
 while True:
@@ -55,64 +49,65 @@ while True:
     #   d. if path ends at output node, add output node to visited_nodes and continue with next source node.
     # 2. if no more source nodes left, repeat 1. with from join_nodes as start nodes until no more join nodes left
 
-    if current_node.is_input():
-        beam_main += beamgenerator.add_source_java_code(current_node)
-        visited_nodes.add(current_node.node_id) # TODO: check logic
-        # continue with child node
-        current_node = beamgenerator.get_next_node(current_node, pending_visit, node_map) 
-        continue
-    elif current_node.is_join():
-        if all(node_id in visited_nodes for node_id in current_node.join_list):
-            # can be safely joined since all parents have been visited
+    if current_node.is_join() and not all(node_id in visited_nodes for node_id in current_node.join_list):
+        # wait for all parents to be visited and stops current path traversal (later to be continued from join node)
+        join_nodes[current_node.node_id] = current_node
+        current_node = None 
+    
+    if current_node:  # i.e. current node is not join node that has unprocessed parents
+        print(f"Current processable node: {current_node.node_id}") # TODO: remove
+        visited_nodes.add(current_node.node_id)
+        if current_node.is_input():
+            beam_main += beamgenerator.add_source_java_code(current_node)
+        
+        elif current_node.is_join():
             beam_main += beamgenerator.add_join_java_code(current_node, node_map)
             
-        else:
-            # wait for all parents to be visited
-            join_nodes[current_node.node_id] = current_node
-            current_node = None # stops current path traversal (later to be continued from join node)
-    
-    if current_node:
-        visited_nodes.add(current_node.node_id)
-        if current_node.is_transform():
-            # TODO
-            pass
+        elif current_node.is_transform(): # not join!
+            beam_main += beamgenerator.add_transform_java_code(current_node, node_map)
+        
+        elif current_node.is_output(): 
+            beam_main += beamgenerator.add_sink_java_code(current_node, node_map) 
 
-        if current_node.is_output(): # TODO: could it be both transform and output?
-            # TODO
-            
+        if current_node.is_output(): 
+            # note that if current node is output it could also be join/transform => need separate case handling          
             current_node = None # terminates current path traversal
-
         else:
             # continue with child node
-            current_node = beamgenerator.get_next_node(current_node, pending_visit, node_map) 
+            current_node = beamgenerator.get_next_node(current_node, pending_visit, node_map, join_nodes) 
             continue
 
-        
-        
-    
-    if len(source_node_map) > 0:
-        # continue with next source node
-        _, current_node = source_node_map.popitem()
-    elif len(pending_visit) > 0:
-        # continue with next node in pending list
-        current_node = node_map[pending_visit.pop()]
-    elif len(join_nodes) > 0:
-        # find first join node that can be safely joined
-        changed = False
-        for join_node_id, join_node in join_nodes.items():
-            if all(node_id in visited_nodes for node_id in join_node.join_list):
-                # can be safely joined since all parents have been visited
-                beam_main += beamgenerator.add_join_java_code(join_node, node_map)
-                visited_nodes.add(join_node.node_id)
-                # continue with child node
-                current_node = beamgenerator.get_next_node(join_node, pending_visit, node_map)
-                changed = True
-                break
-        if not changed:
-            raise Exception("No join node can be safely joined and no more nodes to visit left. Graph cannot be transformed into a beam pipeline.")
-    else:
-        # no more nodes left
-        break
+    # current path is terminated => find new node to continue algorithm
+    is_searching_child = True
+    while is_searching_child:
+        print(f"Pending nodes: {pending_visit}") # TODO: remove
+        print(f"Join nodes: {join_nodes}") # TODO: remove
+        if len(pending_visit) > 0:
+            # continue with next node in pending list
+            current_node = node_map[pending_visit.pop()]
+            is_searching_child = False
+        elif len(join_nodes) > 0:
+            # find first join node that can be safely joined
+            changed = False
+            for join_node_id, join_node in join_nodes.copy().items():
+                if all(node_id in visited_nodes for node_id in join_node.join_list):
+                    # can be safely joined since all parents have been visited
+                    beam_main += beamgenerator.add_join_java_code(join_node, node_map)
+                    visited_nodes.add(join_node_id)
+                    del join_nodes[join_node_id]
+                    changed = True
+                    if not join_node.is_output():
+                        # continue with child node
+                        current_node = beamgenerator.get_next_node(join_node, pending_visit, node_map, join_nodes)
+                        is_searching_child = False
+                        break
+            if not changed:
+                raise Exception("No join node can be safely joined and no more nodes to visit left. Graph cannot be transformed into a beam pipeline.")
+        else:
+            # no more nodes left
+            print(beam_main)
+            print("Terminated successfully!")
+            exit()
 
 
 

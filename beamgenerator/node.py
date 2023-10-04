@@ -18,10 +18,11 @@ class Node:
 
     def __init__(self, node_id, node: dict, node_info: dict):
         self.node_id: str = node_id
-        self.type: str = node["type"]
-        self.name: str = node.get('operation') # Note this is the transform operation for transforms and source name for sources
-        self.type: str = node['type']
-        self.next_oiid: list[str] = node.get('next_oiid') if isinstance(node.get('next_oiid'), list) else [node.get('next_oiid')] if node.get('next_oiid') else []
+        self.type: str = node_info["type"]
+        self.name: str = node_info["name"] # Note this is the transform operation for transforms and source name for sources
+        # for transform this is one in ["Mean", "Flatmap", "Map", "Filter", "Window"]
+        # for streamoutput this is one in ["KafkaOutput", "DeltaOutput"]
+        self.next_oiid: list[str] = [] if (node.get('next_oiid') == "none") else node.get('next_oiid') if isinstance(node.get('next_oiid'), list) else [node.get('next_oiid')] if node.get('next_oiid') else []
         self.join_list: list[str] = node.get('join_list') 
 
         if self.is_input():
@@ -36,7 +37,7 @@ class Node:
                 self.output_p_collection_type.add_field((prop, prop_schema['type']))
 
     def is_input(self):
-        return self.type == 'input'
+        return self.type == 'streaminput'
     
     def is_join(self):
         return self.join_list != None and len(self.join_list) > 1
@@ -45,7 +46,7 @@ class Node:
         return self.type == 'transform'
 
     def is_output(self):
-        return self.type == 'output' or self.next_oiid == None or len(self.next_oiid) == 0
+        return self.type == 'streamoutput' or self.next_oiid == None or len(self.next_oiid) == 0 or self.next_oiid == "none"
 
     def add_input_p_collection_type(self, input_p_collection_type: AbstractPCollectionType):
         self.input_p_collection_types.append(input_p_collection_type)
