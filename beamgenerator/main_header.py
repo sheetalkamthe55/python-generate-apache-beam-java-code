@@ -29,6 +29,7 @@ import org.joda.time.Duration;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import io.delta.standalone.DeltaLog;
 import java.io.Serializable;
@@ -36,20 +37,19 @@ import org.apache.beam.sdk.coders.AvroCoder;
 import com.google.gson.annotations.SerializedName;
 import org.apache.beam.sdk.coders.DefaultCoder;
 
-import {package_name}.InputData;
 import com.google.gson.Gson;
 import org.apache.beam.sdk.values.TypeDescriptors;
 
     '''
 
+# TODO: add logger?
 def create_main_helper_classes(bootstrap_server_default = "localhost:9092"):
     return f'''
-    private static final Logger LOG = LogManager.getLogger(TestBeamPipeline.class);
 
     public interface IoTStreamingOptions extends PipelineOptions {{
 
         @Description("Kafka bootstrap servers, comma separated list")
-        @Default.String({bootstrap_server_default})
+        @Default.String("{bootstrap_server_default}")
         String getKafkaBootstrapServers();
 
         void setKafkaBootstrapServers(String kafkaBootstrapServers);
@@ -67,16 +67,22 @@ def create_main_helper_classes(bootstrap_server_default = "localhost:9092"):
         void setOutputFile(String outputFile);
     }}
 
-    private static PTransform<@UnknownKeyFor @NonNull @Initialized PBegin, @UnknownKeyFor @NonNull @Initialized PCollection<@UnknownKeyFor @NonNull @Initialized KV<String, String>>> kafkaRead(IoTStreamingOptions options, String test, Map<String, Object> consumerConfig) {{
+    private static PTransform<@UnknownKeyFor @NonNull @Initialized PBegin, @UnknownKeyFor @NonNull @Initialized PCollection<@UnknownKeyFor @NonNull @Initialized KV<String, String>>> kafkaRead(IoTStreamingOptions options, String topic, Map<String, Object> consumerConfig) {{
         return KafkaIO.<String, String>read()
                 .withBootstrapServers(options.getKafkaBootstrapServers())
-                .withTopicPartitions(
-                        Collections.singletonList(new TopicPartition(test, 0))
-                )
+                .withTopic(topic)
                 .withKeyDeserializer(StringDeserializer.class)
                 .withValueDeserializer(StringDeserializer.class)
                 .withConsumerConfigUpdates(consumerConfig) // TODO: needed?
                 .withoutMetadata();
+    }} 
+
+    private static @UnknownKeyFor @NonNull @Initialized PTransform<@UnknownKeyFor @NonNull @Initialized PCollection<String>, @UnknownKeyFor @NonNull @Initialized PDone> kafkaWrite(IoTStreamingOptions options, String topic) {{
+        return KafkaIO.<String, String>write()
+                .withBootstrapServers(options.getKafkaBootstrapServers())
+                .withTopic(topic)
+                .withValueSerializer(StringSerializer.class)
+                .values();
     }}
 
     private static <T> Window<T> window(long duration, boolean sliding, long period) {{
@@ -101,13 +107,13 @@ def create_main_helper_classes(bootstrap_server_default = "localhost:9092"):
         final Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.put("auto.offset.reset", "earliest");
 
-'''
+''' # TODO: remove topic partition for kafka?
 
 def create_main_header(package_name, source_node_map, bootstrap_server_default = "localhost:9092"):
     ## Create top of the main class ##
     beam_main = create_import_header(package_name)
     beam_main += '''
-    public class TestBeamPipeline {
+public class TestBeamPipeline {
 
     '''
     beam_main += create_input_schema_classes(source_node_map)

@@ -61,6 +61,7 @@ while True:
             beam_main += beamgenerator.add_source_java_code(current_node)
         
         elif current_node.is_join():
+            join_nodes.pop(current_node.node_id, None)
             beam_main += beamgenerator.add_join_java_code(current_node, node_map)
             
         elif current_node.is_transform(): # not join!
@@ -105,6 +106,12 @@ while True:
                 raise Exception("No join node can be safely joined and no more nodes to visit left. Graph cannot be transformed into a beam pipeline.")
         else:
             # no more nodes left
+            beam_main += f'''
+        // Run the pipeline
+        pipeline.run();
+    }}
+}}
+'''         
             print(beam_main)
             print("Terminated successfully!")
             exit()

@@ -46,9 +46,9 @@ def create_input_schema_classes(source_node_map: dict[str, Node]):
 
         input_schema_classes += f'''
     @DefaultCoder(AvroCoder.class) 
-    public class {source_node.output_p_collection_type.name} implements Serializable {{
+    public class {source_node.output_p_collection_type.type} implements Serializable {{
     
-        public {source_node.output_p_collection_type.name}() {{}};
+        public {source_node.output_p_collection_type.type}() {{}};
         {class_fields}
         {class_methods}
     }}

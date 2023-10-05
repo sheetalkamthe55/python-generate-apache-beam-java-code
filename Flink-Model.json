@@ -55,7 +55,7 @@
              },
              {
                 "name":"inputjson",
-                "value":"{         \"$schema\": \"http://json-schema.org/draft-07/schema#\",         \"type\": \"object\",         \"properties\": {           \"component\": {             \"type\": \"string\"           },           \"id\": {             \"type\": \"string\"           },           \"temperature\": {             \"type\": \"Double\"           }         },         \"required\": [           \"component\",           \"id\",           \"temperature\"         ]       }"
+                "value":"{         \"$schema\": \"http://json-schema.org/draft-07/schema#\",         \"type\": \"object\",         \"properties\": {           \"component\": {             \"type\": \"String\"           },           \"id\": {             \"type\": \"String\"           },           \"temperature\": {             \"type\": \"Double\"           }         },         \"required\": [           \"component\",           \"id\",           \"temperature\"         ]       }"
              },
              {
                 "name":"windowlengthInSec",
@@ -106,18 +106,18 @@
        },
        {
           "id":"node4",
-          "name":"MockStreamOutput",
+          "name":"FileOutput",
           "type":"streamoutput",
           "parameter_list":[
-             {
-                "name":"kafkaTopic",
-                "value":"echo-output"
-             }
-          ]
+            {
+               "name":"outputFile",
+               "value":"node4-output.txt"
+            }
+         ]
        },
        {
           "id":"node5",
-          "name":"MockStreamOutput",
+          "name":"KafkaOutput",
           "type":"streamoutput",
           "parameter_list":[
              {

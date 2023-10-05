@@ -1,9 +1,8 @@
-from typing import ClassVar
-
+JAVA_NUMERIC_TYPE = ['Double', 'Integer', 'Float', 'Long', 'Short']
 
 class AbstractPCollectionType:
-    name: ClassVar[str] = ""
-    type: ClassVar[str] = ""
+    name: str = ""
+    type: str = ""
     def __init__(self, type, name):
         self.type = type
         self.name = name # name of PCollection in Java code
@@ -22,7 +21,7 @@ class SimplePCollectionType(AbstractPCollectionType):
         return self.type
 
 class InputPCollectionType(AbstractPCollectionType):
-    fields: ClassVar[list[str, str]] = {} # list of tuples containing the field name and type
+    fields: list[str, str] = {} # list of tuples containing the field name and type
 
     def __init__(self, type: str, name: str, fields: dict[str, str] = {}):
         self.type = type
